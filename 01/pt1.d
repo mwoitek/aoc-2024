@@ -1,9 +1,10 @@
 import std.algorithm.iteration : map, sum;
 import std.algorithm.sorting : sort;
+import std.datetime.stopwatch : AutoStart, StopWatch;
 import std.format.read : formattedRead;
 import std.math.algebraic : abs;
 import std.range : zip;
-import std.stdio : File, writeln;
+import std.stdio : File, writef, writeln;
 
 struct Lists {
     long[] list1;
@@ -39,7 +40,15 @@ Lists readLists(in string inputPath)
 void main(string[] args)
 {
     const string inputPath = args[1];
+    auto sw = StopWatch(AutoStart.no);
+
+    sw.start();
     const Lists lists = readLists(inputPath);
     const long totalDistance = lists.totalDistance();
+    sw.stop();
+
     writeln("Total distance: ", totalDistance);
+
+    const auto execTime = sw.peek.total!"usecs" / 1000.0;
+    writef("Execution time (ms): %.3f\n", execTime);
 }

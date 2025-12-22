@@ -1,6 +1,7 @@
 import std.algorithm.iteration : filter, map, sum;
+import std.datetime.stopwatch : AutoStart, StopWatch;
 import std.format.read : formattedRead;
-import std.stdio : File, writeln;
+import std.stdio : File, writef, writeln;
 
 struct Lists {
     ulong[] left;
@@ -50,7 +51,15 @@ ulong similarityScore(in ulong[] left, in ulong[] right)
 void main(string[] args)
 {
     const auto inputPath = args[1];
+    auto sw = StopWatch(AutoStart.no);
+
+    sw.start();
     const auto lists = readLists(inputPath);
     const auto score = similarityScore(lists.left, lists.right);
+    sw.stop();
+
     writeln("Similarity score: ", score);
+
+    const auto execTime = sw.peek.total!"usecs" / 1000.0;
+    writef("Execution time (ms): %.3f\n", execTime);
 }
