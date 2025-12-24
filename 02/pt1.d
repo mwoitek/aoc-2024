@@ -2,10 +2,11 @@ import std.algorithm.iteration : filter, fold, map, splitter;
 import std.algorithm.searching : all;
 import std.array : array;
 import std.conv : to;
+import std.datetime.stopwatch : AutoStart, StopWatch;
 import std.math.algebraic : abs;
 import std.math.traits : sgn;
 import std.range : dropOne, zip;
-import std.stdio : File, writeln;
+import std.stdio : File, writef, writeln;
 
 int[][] readLists(in string inputPath)
 {
@@ -37,7 +38,15 @@ bool isSafe(in int[] list)
 void main(string[] args)
 {
     const string inputPath = args[1];
+    auto sw = StopWatch(AutoStart.no);
+
+    sw.start();
     const int[][] lists = readLists(inputPath);
     const auto safeCount = fold!((a, e) => isSafe(e) ? a + 1 : a)(lists, 0);
+    sw.stop();
+
     writeln("Number of safe reports: ", safeCount);
+
+    auto execTime = sw.peek.total!"usecs" / 1000.0;
+    writef("Execution time (ms): %.3f\n", execTime);
 }
