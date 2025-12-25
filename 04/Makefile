@@ -1,7 +1,7 @@
 DC = dmd
 DFLAGS = -O -boundscheck=off -inline -release
 
-PARTS = 1
+PARTS = 1 2
 INPUT ?= ../data/day_04.txt
 
 all: $(addprefix pt,$(addsuffix .out,$(PARTS)))
