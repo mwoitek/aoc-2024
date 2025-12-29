@@ -1,97 +1,86 @@
-// NOTE: To solve this puzzle, I actually generated a solution for every solvable
-// problem. This is not necessary, but I did it in order to check my results. If I
-// refactor my solution and remove the corresponding code, I can get to the answer
-// even faster. However, this version of my program takes ~6 ms to run. So, for
-// now, this code is good enough.
+const char[2] OPERATORS = ['*', '+'];
 
-const char[2] OPERATORS = ['+', '*'];
+// wc -l day_07.txt
+const size_t EQUATIONS_LENGTH = 850;
 
-ulong[][ulong] readInput(in string inputPath)
+// cut -d':' -f2 day_07.txt | sed 's/^ //' | awk '{print NF}' | sort -nru | head -n1
+const size_t NUMS_LENGTH = 12;
+
+struct Equation {
+    ulong target;
+    ulong[] nums;
+}
+
+Equation parseLine(in string line)
 {
     import std.algorithm.iteration : map, splitter;
     import std.algorithm.searching : countUntil;
-    import std.array : array;
+    import std.array : appender;
     import std.conv : to;
+
+    auto idx = line.countUntil(':');
+    auto target = line[0 .. idx].to!ulong;
+    auto arrBuilder = appender!(ulong[]);
+    arrBuilder.reserve(NUMS_LENGTH);
+    foreach (num; line[idx + 2 .. $].splitter.map!(to!ulong))
+        arrBuilder.put(num);
+    return Equation(target, arrBuilder.data);
+}
+
+string[] readInput(in string inputPath)
+{
+    import std.array : appender;
     import std.stdio : File;
 
-    ulong[][ulong] equations;
+    auto arrBuilder = appender!(string[]);
+    arrBuilder.reserve(EQUATIONS_LENGTH);
     auto file = File(inputPath, "r");
-    foreach (line; file.byLine) {
-        auto idx = line.countUntil(':');
-        const ulong target = line[0 .. idx].to!ulong;
-        ulong[] nums = line[idx + 2 .. $].splitter.map!(to!ulong).array;
-        equations[target] = nums;
-    }
-    return equations;
+    foreach (line; file.byLineCopy)
+        arrBuilder.put(line);
+    return arrBuilder.data;
 }
 
-struct Candidate {
-    char[] ops;
-    size_t idx;
-    ulong val;
-
-    this(in ulong[] nums)
-    {
-        this.ops = new char[](nums.length - 1);
-        this.idx = 0;
-        this.val = nums[0];
-    }
-
-    bool isFull()
-    {
-        return ops.length == idx;
-    }
-
-    void add(in char op, in ulong deltaVal)
-    {
-        ops[idx++] = op;
-        val += deltaVal;
-    }
-
-    void remove(in ulong deltaVal)
-    {
-        ops[idx--] = char.init;
-        val -= deltaVal;
-    }
-}
-
-char[] findSolution(in ulong target, in ulong[] nums)
+bool hasSolution(in Equation equation)
 {
-    bool buildSolution(ref Candidate c)
+    bool rec(in ulong val, in size_t idx)
     {
-        if (c.isFull)
-            return c.val == target;
+        if (idx + 1 == equation.nums.length)
+            return val == equation.target;
         foreach (op; OPERATORS) {
-            const ulong newVal = op == '+' ? c.val + nums[c.idx + 1] : c.val * nums[c.idx + 1];
-            if (newVal > target)
+            const ulong newVal = op == '*' ? val * equation.nums[idx + 1] : val + equation.nums[idx + 1];
+            if (newVal > equation.target)
                 continue;
-            const ulong deltaVal = newVal - c.val;
-            c.add(op, deltaVal);
-            if (buildSolution(c))
+            if (rec(newVal, idx + 1))
                 return true;
-            c.remove(deltaVal);
         }
         return false;
     }
 
-    Candidate candidate = Candidate(nums);
-    return buildSolution(candidate) ? candidate.ops : null;
+    return rec(equation.nums[0], 0);
 }
 
-ulong sumValidTargets(in ulong[][ulong] equations)
+ulong sumValidTargets(in string inputPath)
 {
-    import std.array : byPair;
+    import std.algorithm.iteration : map;
+    import std.parallelism : taskPool;
 
-    ulong sum = 0;
-    foreach (target, nums; equations.byPair) {
-        const char[] solution = findSolution(target, nums);
-        sum += solution.ptr is null ? 0 : target;
+    const string[] lines = inputPath.readInput;
+
+    ulong helper(in string line)
+    {
+        const Equation equation = line.parseLine;
+        return hasSolution(equation) ? equation.target : 0UL;
     }
-    return sum;
+
+    return taskPool.reduce!"a + b"(0UL, lines.map!helper);
 }
 
 void main(string[] args)
 {
+    import core.memory : GC;
+
+    GC.disable;
+
     import std.datetime.stopwatch : AutoStart, StopWatch;
     import std.stdio : writef, writeln;
 
@@ -99,8 +88,7 @@ void main(string[] args)
     auto sw = StopWatch(AutoStart.no);
 
     sw.start;
-    const ulong[][ulong] equations = inputPath.readInput;
-    const ulong sum = equations.sumValidTargets;
+    const ulong sum = inputPath.sumValidTargets;
     sw.stop;
 
     writeln("Total calibration result: ", sum);
