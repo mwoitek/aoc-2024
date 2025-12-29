@@ -32,36 +32,6 @@ Equation[] readInput(in string inputPath)
     return arrBuilder.data;
 }
 
-struct Candidate {
-    char[] ops;
-    size_t idx;
-    ulong val;
-
-    this(in ulong[] nums)
-    {
-        this.ops = new char[](nums.length - 1);
-        this.idx = 0;
-        this.val = nums[0];
-    }
-
-    bool isFull()
-    {
-        return ops.length == idx;
-    }
-
-    void add(in char op, in ulong deltaVal)
-    {
-        ops[idx++] = op;
-        val += deltaVal;
-    }
-
-    void remove(in ulong deltaVal)
-    {
-        ops[--idx] = char.init;
-        val -= deltaVal;
-    }
-}
-
 uint numDigits(ulong num)
 {
     if (num == 0)
@@ -100,37 +70,35 @@ ulong applyOperator(char op, ulong a, ulong b)
     return res;
 }
 
-char[] findSolution(in Equation equation)
+bool hasSolution(in Equation equation)
 {
-    bool buildSolution(ref Candidate c)
+    auto target = equation.target;
+    auto nums = equation.nums;
+
+    bool rec(in ulong val, in size_t idx)
     {
-        if (c.isFull)
-            return c.val == equation.target;
+        if (idx + 1 == nums.length)
+            return val == target;
         foreach (op; OPERATORS) {
-            const ulong newVal = applyOperator(op, c.val, equation.nums[c.idx + 1]);
-            if (newVal > equation.target)
+            const ulong newVal = applyOperator(op, val, nums[idx + 1]);
+            if (newVal > target)
                 continue;
-            const ulong deltaVal = newVal - c.val;
-            c.add(op, deltaVal);
-            if (buildSolution(c))
+            if (rec(newVal, idx + 1))
                 return true;
-            c.remove(deltaVal);
         }
         return false;
     }
 
-    Candidate c = Candidate(equation.nums);
-    return buildSolution(c) ? c.ops : null;
+    return rec(nums[0], 0);
 }
 
 ulong sumValidTargets(in Equation[] equations)
 {
-    ulong sum = 0;
-    foreach (equation; equations) {
-        const char[] solution = findSolution(equation);
-        sum += solution.ptr is null ? 0 : equation.target;
-    }
-    return sum;
+    import std.algorithm.iteration : filter, map, sum;
+
+    return equations.filter!(hasSolution)
+        .map!(e => e.target)
+        .sum;
 }
 
 void main(string[] args)
