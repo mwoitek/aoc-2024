@@ -1,3 +1,8 @@
+// NOTE: I've managed to make this solution a little faster.
+// Now this program takes ~3 ms to run. If I want the
+// execution time to go lower, I probably need to consider a
+// different approach to this problem.
+
 const char[2] OPERATORS = ['*', '+'];
 
 // wc -l day_07.txt
@@ -5,6 +10,19 @@ const size_t EQUATIONS_LENGTH = 850;
 
 // cut -d':' -f2 day_07.txt | sed 's/^ //' | awk '{print NF}' | sort -nru | head -n1
 const size_t NUMS_LENGTH = 12;
+
+string[] readInput(in string inputPath)
+{
+    import std.array : appender;
+    import std.stdio : File;
+
+    auto arrBuilder = appender!(string[]);
+    arrBuilder.reserve(EQUATIONS_LENGTH);
+    auto file = File(inputPath, "r");
+    foreach (line; file.byLineCopy)
+        arrBuilder.put(line);
+    return arrBuilder.data;
+}
 
 struct Equation {
     ulong target;
@@ -25,19 +43,6 @@ Equation parseLine(in string line)
     foreach (num; line[idx + 2 .. $].splitter.map!(to!ulong))
         arrBuilder.put(num);
     return Equation(target, arrBuilder.data);
-}
-
-string[] readInput(in string inputPath)
-{
-    import std.array : appender;
-    import std.stdio : File;
-
-    auto arrBuilder = appender!(string[]);
-    arrBuilder.reserve(EQUATIONS_LENGTH);
-    auto file = File(inputPath, "r");
-    foreach (line; file.byLineCopy)
-        arrBuilder.put(line);
-    return arrBuilder.data;
 }
 
 bool hasSolution(in Equation equation)

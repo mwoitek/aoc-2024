@@ -11,12 +11,25 @@ const size_t EQUATIONS_LENGTH = 850;
 // cut -d':' -f2 day_07.txt | sed 's/^ //' | awk '{print NF}' | sort -nru | head -n1
 const size_t NUMS_LENGTH = 12;
 
+string[] readInput(in string inputPath)
+{
+    import std.array : appender;
+    import std.stdio : File;
+
+    auto arrBuilder = appender!(string[]);
+    arrBuilder.reserve(EQUATIONS_LENGTH);
+    auto file = File(inputPath, "r");
+    foreach (line; file.byLineCopy)
+        arrBuilder.put(line);
+    return arrBuilder.data;
+}
+
 struct Equation {
     ulong target;
     ulong[] nums;
 }
 
-Equation parseLine(in char[] line)
+Equation parseLine(in string line)
 {
     import std.algorithm.iteration : map, splitter;
     import std.algorithm.searching : countUntil;
@@ -30,19 +43,6 @@ Equation parseLine(in char[] line)
     foreach (num; line[idx + 2 .. $].splitter.map!(to!ulong))
         arrBuilder.put(num);
     return Equation(target, arrBuilder.data);
-}
-
-Equation[] readInput(in string inputPath)
-{
-    import std.array : appender;
-    import std.stdio : File;
-
-    auto arrBuilder = appender!(Equation[]);
-    arrBuilder.reserve(EQUATIONS_LENGTH);
-    auto file = File(inputPath, "r");
-    foreach (line; file.byLine)
-        arrBuilder.put(line.parseLine);
-    return arrBuilder.data;
 }
 
 ulong numDigits(in ulong num)
@@ -86,12 +86,20 @@ bool hasSolution(in Equation equation)
     return rec(equation.nums[0], 0);
 }
 
-ulong sumValidTargets(in Equation[] equations)
+ulong sumValidTargets(in string inputPath)
 {
     import std.algorithm.iteration : map;
     import std.parallelism : taskPool;
 
-    return taskPool.reduce!"a + b"(0UL, equations.map!(e => hasSolution(e) ? e.target : 0UL));
+    const string[] lines = inputPath.readInput;
+
+    ulong helper(in string line)
+    {
+        const Equation equation = line.parseLine;
+        return hasSolution(equation) ? equation.target : 0UL;
+    }
+
+    return taskPool.reduce!"a + b"(0UL, lines.map!helper);
 }
 
 void main(string[] args)
@@ -107,8 +115,7 @@ void main(string[] args)
     auto sw = StopWatch(AutoStart.no);
 
     sw.start;
-    const Equation[] equations = inputPath.readInput;
-    const ulong sum = equations.sumValidTargets;
+    const ulong sum = inputPath.sumValidTargets;
     sw.stop;
 
     writeln("Total calibration result: ", sum);
