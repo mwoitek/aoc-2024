@@ -1,4 +1,15 @@
-const char[3] OPERATORS = ['+', '*', '|'];
+// NOTE: Right now, this program takes ~50 ms to run. The real bottleneck seems to
+// be the backtracking algorithm that was used to solve this puzzle. Unless I try
+// a different approach to this problem, I find it hard to believe that the
+// execution time will go much lower. So for now this is good enough.
+
+const char[3] OPERATORS = ['|', '*', '+'];
+
+// wc -l day_07.txt
+const size_t EQUATIONS_LENGTH = 850;
+
+// cut -d':' -f2 day_07.txt | sed 's/^ //' | awk '{print NF}' | sort -nru | head -n1
+const size_t NUMS_LENGTH = 12;
 
 struct Equation {
     ulong target;
@@ -15,6 +26,7 @@ Equation parseLine(in char[] line)
     auto idx = line.countUntil(':');
     auto target = line[0 .. idx].to!ulong;
     auto arrBuilder = appender!(ulong[]);
+    arrBuilder.reserve(NUMS_LENGTH);
     foreach (num; line[idx + 2 .. $].splitter.map!(to!ulong))
         arrBuilder.put(num);
     return Equation(target, arrBuilder.data);
@@ -26,62 +38,44 @@ Equation[] readInput(in string inputPath)
     import std.stdio : File;
 
     auto arrBuilder = appender!(Equation[]);
+    arrBuilder.reserve(EQUATIONS_LENGTH);
     auto file = File(inputPath, "r");
     foreach (line; file.byLine)
         arrBuilder.put(line.parseLine);
     return arrBuilder.data;
 }
 
-uint numDigits(ulong num)
+ulong numDigits(in ulong num)
 {
-    if (num == 0)
-        return 1;
-    uint count = 0;
-    while (num != 0) {
-        num /= 10;
-        count++;
-    }
-    return count;
+    return num < 10 ? 1 : 1 + numDigits(num / 10);
 }
 
-ulong concatenate(ulong a, ulong b)
+ulong concatenate(in ulong a, in ulong b)
 {
     import std.math.exponential : pow;
 
     return a * pow(10, b.numDigits) + b;
 }
 
-ulong applyOperator(char op, ulong a, ulong b)
+ulong applyOperator(in char op, in ulong a, in ulong b)
 {
-    ulong res;
-    switch (op) {
-    case '+':
-        res = a + b;
-        break;
-    case '*':
-        res = a * b;
-        break;
-    case '|':
-        res = concatenate(a, b);
-        break;
-    default:
-        assert(false); // should be unreachable
-    }
-    return res;
+    if (op == '|')
+        return concatenate(a, b);
+    else if (op == '*')
+        return a * b;
+    else
+        return a + b;
 }
 
 bool hasSolution(in Equation equation)
 {
-    auto target = equation.target;
-    auto nums = equation.nums;
-
     bool rec(in ulong val, in size_t idx)
     {
-        if (idx + 1 == nums.length)
-            return val == target;
+        if (idx + 1 == equation.nums.length)
+            return val == equation.target;
         foreach (op; OPERATORS) {
-            const ulong newVal = applyOperator(op, val, nums[idx + 1]);
-            if (newVal > target)
+            const ulong newVal = applyOperator(op, val, equation.nums[idx + 1]);
+            if (newVal > equation.target)
                 continue;
             if (rec(newVal, idx + 1))
                 return true;
@@ -89,25 +83,26 @@ bool hasSolution(in Equation equation)
         return false;
     }
 
-    return rec(nums[0], 0);
+    return rec(equation.nums[0], 0);
 }
 
 ulong sumValidTargets(in Equation[] equations)
 {
-    import std.algorithm.iteration : filter, map, sum;
+    import std.algorithm.iteration : map;
+    import std.parallelism : taskPool;
 
-    return equations.filter!(hasSolution)
-        .map!(e => e.target)
-        .sum;
+    return taskPool.reduce!"a + b"(0UL, equations.map!(e => hasSolution(e) ? e.target : 0UL));
 }
 
 void main(string[] args)
 {
     import core.memory : GC;
+
+    GC.disable;
+
     import std.datetime.stopwatch : AutoStart, StopWatch;
     import std.stdio : writef, writeln;
 
-    GC.disable;
     const string inputPath = args[1];
     auto sw = StopWatch(AutoStart.no);
 
