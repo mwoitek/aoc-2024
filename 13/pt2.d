@@ -1,6 +1,3 @@
-// NOTE: Part 2 has essentially the same solution as
-// part 1. But now I'm using long instead of int.
-
 import std.regex : regex;
 
 // grep '^$' day_13.txt | wc -l | awk '{print $1 + 1}'
@@ -8,18 +5,7 @@ const ulong MAX_PROBS = 320;
 
 static re = regex(r"(\d+)");
 
-struct Problem {
-    long[][] mat;
-    long[] vec;
-
-    this(in long[] nums)
-    {
-        mat = [[nums[0], nums[2]], [nums[1], nums[3]]];
-        vec = [nums[4] + 10_000_000_000_000, nums[5] + 10_000_000_000_000];
-    }
-}
-
-long[] readNumbers(in string inputPath)
+int[] readNumbers(in string inputPath)
 {
     import std.algorithm.iteration : map;
     import std.array : appender;
@@ -27,36 +13,11 @@ long[] readNumbers(in string inputPath)
     import std.file : readText;
     import std.regex : matchAll;
 
-    auto arrBuilder = appender!(long[]);
+    auto arrBuilder = appender!(int[]);
     arrBuilder.reserve(6 * MAX_PROBS);
-    foreach (num; inputPath.readText.matchAll(re).map!(m => m.front.to!long))
+    foreach (num; inputPath.readText.matchAll(re).map!(m => m.front.to!int))
         arrBuilder.put(num);
     return arrBuilder.data;
-}
-
-Problem[] readProblems(in string inputPath)
-{
-    import std.array : appender;
-
-    auto arrBuilder = appender!(Problem[]);
-    arrBuilder.reserve(MAX_PROBS);
-    const long[] nums = inputPath.readNumbers;
-    ulong i = 0;
-    while (i < nums.length) {
-        arrBuilder.put(Problem(nums[i .. i + 6]));
-        i += 6;
-    }
-    return arrBuilder.data;
-}
-
-long determinant(in long[][] mat)
-{
-    return mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0];
-}
-
-long[] matrixVectorMultiply(in long[][] mat, in long[] vec)
-{
-    return [mat[0][0] * vec[0] + mat[0][1] * vec[1], mat[1][0] * vec[0] + mat[1][1] * vec[1]];
 }
 
 bool isValidFraction(in long num, in long den)
@@ -64,30 +25,42 @@ bool isValidFraction(in long num, in long den)
     return (den > 0 && num >= 0 && num % den == 0) || (den < 0 && num <= 0 && (-num) % (-den) == 0);
 }
 
-long[] solve(in long[][] a, in long[] b)
+void solve(in int[] nums, ref long[] solution)
 {
-    const long det = a.determinant;
-    if (det == 0)
-        return [-1, -1]; // no solution
-    const long[][] inv = [[a[1][1], -a[0][1]], [-a[1][0], a[0][0]]];
-    long[] sol = matrixVectorMultiply(inv, b);
-    if (isValidFraction(sol[0], det) && isValidFraction(sol[1], det)) {
-        sol[0] /= det;
-        sol[1] /= det;
-        return sol;
+    const int a00 = nums[0];
+    const int a01 = nums[2];
+    const int a10 = nums[1];
+    const int a11 = nums[3];
+    const int det = a00 * a11 - a01 * a10;
+    if (det == 0) {
+        solution[0] = -1;
+        solution[1] = -1;
+        return;
     }
-    return [-1, -1]; // no non-negative integer solution
+    const long b0 = nums[4] + 10_000_000_000_000;
+    const long b1 = nums[5] + 10_000_000_000_000;
+    const long x0 = a11 * b0 - a01 * b1;
+    const long x1 = a00 * b1 - a10 * b0;
+    if (isValidFraction(x0, det) && isValidFraction(x1, det)) {
+        solution[0] = x0 / det;
+        solution[1] = x1 / det;
+        return;
+    }
+    solution[0] = -1;
+    solution[1] = -1;
 }
 
-long countTokens(in Problem[] problems)
+long countTokens(in string inputPath)
 {
     long count = 0;
-    long[] sol;
-    foreach (problem; problems) {
-        sol = solve(problem.mat, problem.vec);
-        if (sol[0] == -1)
-            continue;
-        count += 3 * sol[0] + sol[1];
+    const int[] nums = inputPath.readNumbers;
+    auto solution = new long[](2);
+    ulong i = 0;
+    while (i < nums.length) {
+        solve(nums[i .. i + 6], solution);
+        if (solution[0] != -1)
+            count += 3 * solution[0] + solution[1];
+        i += 6;
     }
     return count;
 }
@@ -105,8 +78,7 @@ void main(string[] args)
     auto sw = StopWatch(AutoStart.no);
 
     sw.start;
-    const Problem[] problems = inputPath.readProblems;
-    const long numTokens = problems.countTokens;
+    const long numTokens = inputPath.countTokens;
     sw.stop;
 
     writeln("Number of tokens: ", numTokens);
