@@ -1,24 +1,9 @@
-// NOTE: This solution probably can be made faster. After all, I've used dynamic
-// arrays in a few places where they can be easily avoided. But this program takes
-// less than 2 ms to run. So it's good enough for now.
-
 import std.regex : regex;
 
 // grep '^$' day_13.txt | wc -l | awk '{print $1 + 1}'
 const ulong MAX_PROBS = 320;
 
 static re = regex(r"(\d+)");
-
-struct Problem {
-    int[][] mat;
-    int[] vec;
-
-    this(in int[] nums)
-    {
-        mat = [[nums[0], nums[2]], [nums[1], nums[3]]];
-        vec = [nums[4], nums[5]];
-    }
-}
 
 int[] readNumbers(in string inputPath)
 {
@@ -35,60 +20,47 @@ int[] readNumbers(in string inputPath)
     return arrBuilder.data;
 }
 
-Problem[] readProblems(in string inputPath)
-{
-    import std.array : appender;
-
-    auto arrBuilder = appender!(Problem[]);
-    arrBuilder.reserve(MAX_PROBS);
-    const int[] nums = inputPath.readNumbers;
-    ulong i = 0;
-    while (i < nums.length) {
-        arrBuilder.put(Problem(nums[i .. i + 6]));
-        i += 6;
-    }
-    return arrBuilder.data;
-}
-
-int determinant(in int[][] mat)
-{
-    return mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0];
-}
-
-int[] matrixVectorMultiply(in int[][] mat, in int[] vec)
-{
-    return [mat[0][0] * vec[0] + mat[0][1] * vec[1], mat[1][0] * vec[0] + mat[1][1] * vec[1]];
-}
-
 bool isValidFraction(in int num, in int den)
 {
     return (den > 0 && num >= 0 && num % den == 0) || (den < 0 && num <= 0 && (-num) % (-den) == 0);
 }
 
-int[] solve(in int[][] a, in int[] b)
+void solve(in int[] nums, ref int[] solution)
 {
-    const int det = a.determinant;
-    if (det == 0)
-        return [-1, -1]; // no solution
-    const int[][] inv = [[a[1][1], -a[0][1]], [-a[1][0], a[0][0]]];
-    int[] sol = matrixVectorMultiply(inv, b);
-    if (isValidFraction(sol[0], det) && isValidFraction(sol[1], det)) {
-        sol[0] /= det;
-        sol[1] /= det;
-        return sol;
+    const int a00 = nums[0];
+    const int a01 = nums[2];
+    const int a10 = nums[1];
+    const int a11 = nums[3];
+    const int det = a00 * a11 - a01 * a10;
+    if (det == 0) {
+        solution[0] = -1;
+        solution[1] = -1;
+        return;
     }
-    return [-1, -1]; // no non-negative integer solution
+    const int b0 = nums[4];
+    const int b1 = nums[5];
+    const int x0 = a11 * b0 - a01 * b1;
+    const int x1 = a00 * b1 - a10 * b0;
+    if (isValidFraction(x0, det) && isValidFraction(x1, det)) {
+        solution[0] = x0 / det;
+        solution[1] = x1 / det;
+        return;
+    }
+    solution[0] = -1;
+    solution[1] = -1;
 }
 
-int countTokens(in Problem[] problems)
+int countTokens(in string inputPath)
 {
     int count = 0;
-    int[] sol;
-    foreach (problem; problems) {
-        sol = solve(problem.mat, problem.vec);
-        if (sol[0] == -1)
-            continue;
-        count += 3 * sol[0] + sol[1];
+    const int[] nums = inputPath.readNumbers;
+    auto solution = new int[](2);
+    ulong i = 0;
+    while (i < nums.length) {
+        solve(nums[i .. i + 6], solution);
+        if (solution[0] != -1)
+            count += 3 * solution[0] + solution[1];
+        i += 6;
     }
     return count;
 }
@@ -106,8 +78,7 @@ void main(string[] args)
     auto sw = StopWatch(AutoStart.no);
 
     sw.start;
-    const Problem[] problems = inputPath.readProblems;
-    const int numTokens = problems.countTokens;
+    const int numTokens = inputPath.countTokens;
     sw.stop;
 
     writeln("Number of tokens: ", numTokens);
