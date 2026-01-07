@@ -4,6 +4,7 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
+from pprint import pprint
 from shutil import which
 from time import sleep
 from typing import cast
@@ -109,3 +110,42 @@ def compute_statistics(exec_times: list[float]) -> dict[str, float]:
         "Standard deviation": std,
         "Standard error": std / n ** (1 / 2),
     }
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Not enough arguments!", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        day = int(sys.argv[1])
+    except ValueError:
+        print(f"Invalid value for day: {sys.argv[1]}", file=sys.stderr)
+        sys.exit(2)
+
+    if day < 1 or day > 25:
+        print(f"Invalid value for day: {day}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        part = int(sys.argv[2])
+    except ValueError:
+        print(f"Invalid value for part: {sys.argv[2]}", file=sys.stderr)
+        sys.exit(2)
+
+    if part not in {1, 2}:
+        print(f"Invalid value for part: {part}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"Day: {day}, Part: {part}\n")
+
+    compiled = compile_solution(day, part)
+    if not compiled:
+        sys.exit(3)
+
+    exec_times = run_solution(day, part)
+    if exec_times is None:
+        sys.exit(4)
+
+    stats = compute_statistics(exec_times)
+    pprint(stats)
