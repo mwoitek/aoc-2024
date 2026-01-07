@@ -1,21 +1,18 @@
-# compute average and standard deviation
 # print results to file
 
+import statistics
 import subprocess
 import sys
 from pathlib import Path
 from shutil import which
 from time import sleep
+from typing import cast
 
 ROOT_DIR = Path("~/repos/advent_of_code_2024").expanduser()
 
 
 def is_command_available(cmd: str) -> bool:
     return which(cmd) is not None
-
-
-def is_valid_directory(directory: Path) -> bool:
-    return directory.exists() and directory.is_dir()
 
 
 def is_valid_file(file: Path) -> bool:
@@ -27,20 +24,18 @@ def compile_solution(day: int, part: int) -> bool:
         print("Compiler dmd is not available", file=sys.stderr)
         return False
 
-    day_dir = ROOT_DIR / f"{day:02}"
-    if not is_valid_directory(day_dir):
-        print(f"Invalid directory: {day_dir}", file=sys.stderr)
-        return False
-
-    solution_file = day_dir / f"pt{part}.d"
+    solution_file = ROOT_DIR / f"{day:02}" / f"pt{part}.d"
     if not is_valid_file(solution_file):
-        print(f"Invalid file: {solution_file}", file=sys.stderr)
+        print(f"Solution file could not be found: {solution_file}", file=sys.stderr)
         return False
 
     output_file = solution_file.with_suffix(".out").name
+    cwd = solution_file.parent
+
+    print("Compiling solution file... ", end="")
     proc = subprocess.run(
         [
-            "dmd",
+            cast("str", which("dmd")),
             solution_file.name,
             "-O",
             "-boundscheck=off",
@@ -48,21 +43,24 @@ def compile_solution(day: int, part: int) -> bool:
             "-release",
             f"-of={output_file}",
         ],
-        cwd=day_dir,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        cwd=cwd,
         check=False,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
     )
-    return proc.returncode == 0
+    ok = proc.returncode == 0
+    print("Done." if ok else "Failed!")
+
+    return ok
 
 
-def process_stdout(stdout: str) -> float:
+def get_execution_time(stdout: str) -> float:
     last_line = stdout.rstrip().split("\n")[-1]
     i = last_line.index(":")
     return float(last_line[i + 2 :])
 
 
-def run_solution(day: int, part: int, discard: int = 2, keep: int = 20) -> list[float] | None:
+def run_solution(day: int, part: int, times: int = 20, delay: float = 2.0) -> list[float] | None:
     compiled_solution = ROOT_DIR / f"{day:02}" / f"pt{part}.out"
     if not is_valid_file(compiled_solution):
         print(f"Compiled solution could not be found: {compiled_solution}", file=sys.stderr)
@@ -73,34 +71,41 @@ def run_solution(day: int, part: int, discard: int = 2, keep: int = 20) -> list[
         print(f"Input file could not be found: {input_file}", file=sys.stderr)
         return None
 
-    run_cmd = [f"./{compiled_solution.name}", str(input_file)]
+    cmd = [f"./{compiled_solution.name}", str(input_file)]
     cwd = compiled_solution.parent
-
-    print("Running program a few times before measuring starts... ", end="", flush=True)
-    for _ in range(discard):
-        subprocess.run(
-            run_cmd,
-            cwd=cwd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        sleep(1)
-    print("Done.", flush=True)
 
     exec_times: list[float] = []
 
-    print("Measuring execution times... ", end="", flush=True)
-    for _ in range(keep):
-        proc = subprocess.run(run_cmd, cwd=cwd, capture_output=True, text=True, check=False)
-        sleep(2)
-        exec_time = process_stdout(proc.stdout)
+    for t in range(times):
+        print(f"Measuring execution times [{t + 1}/{times}]...", end="\r", flush=True)
+        proc = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        exec_time = get_execution_time(proc.stdout)
         exec_times.append(exec_time)
-    print("Done.", flush=True)
+        if t < times - 1:
+            sleep(delay)
+    print(f"Measuring execution times [{times}/{times}]... Done.")
 
     return exec_times
 
 
-# times = run_solution(1, 2)
-# if times is not None:
-#     print(times)
+def compute_statistics(exec_times: list[float]) -> dict[str, float]:
+    n = len(exec_times)
+    quartiles = statistics.quantiles(exec_times, n=4)
+    std = statistics.stdev(exec_times)
+    return {
+        "Number of observations": n,
+        "Minimum": min(exec_times),
+        "25th percentile": quartiles[0],
+        "Mean": statistics.fmean(exec_times),
+        "Median": statistics.median(exec_times),
+        "75th percentile": quartiles[-1],
+        "Maximum": max(exec_times),
+        "Standard deviation": std,
+        "Standard error": std / n ** (1 / 2),
+    }
