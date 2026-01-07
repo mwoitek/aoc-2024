@@ -4,10 +4,9 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
-from pprint import pprint
 from shutil import which
 from time import sleep
-from typing import cast
+from typing import IO, cast
 
 ROOT_DIR = Path("~/repos/advent_of_code_2024").expanduser()
 
@@ -33,7 +32,7 @@ def compile_solution(day: int, part: int) -> bool:
     output_file = solution_file.with_suffix(".out").name
     cwd = solution_file.parent
 
-    print("Compiling solution file... ", end="")
+    print("Compiling solution file... ", end="", flush=True)
     proc = subprocess.run(
         [
             cast("str", which("dmd")),
@@ -56,7 +55,7 @@ def compile_solution(day: int, part: int) -> bool:
 
 
 def get_execution_time(stdout: str) -> float:
-    last_line = stdout.rstrip().split("\n")[-1]
+    last_line = stdout.rstrip().splitlines()[-1]
     i = last_line.index(":")
     return float(last_line[i + 2 :])
 
@@ -95,7 +94,13 @@ def run_solution(day: int, part: int, times: int = 20, delay: float = 2.0) -> li
     return exec_times
 
 
-def compute_statistics(exec_times: list[float]) -> dict[str, float]:
+def remove_outliers(exec_times: list[float], p: int = 90) -> list[float]:
+    percentiles = statistics.quantiles(exec_times, n=100)
+    percentile = percentiles[p - 1]
+    return [t for t in exec_times if t < percentile]
+
+
+def compute_statistics(exec_times: list[float]) -> dict[str, int | float]:
     n = len(exec_times)
     quartiles = statistics.quantiles(exec_times, n=4)
     std = statistics.stdev(exec_times)
@@ -110,6 +115,21 @@ def compute_statistics(exec_times: list[float]) -> dict[str, float]:
         "Standard deviation": std,
         "Standard error": std / n ** (1 / 2),
     }
+
+
+def print_statistics(
+    stats: dict[str, int | float],
+    file: IO = sys.stdout,
+    decimal_places: int = 4,
+) -> None:
+    width = max(len(k) for k in stats)
+    print("# Summary statistics:", file=file)
+    print("#", file=file)
+    for name, value in stats.items():
+        if isinstance(value, int):
+            print(f"# {name.ljust(width)} = {value}", file=file)
+        else:
+            print(f"# {name.ljust(width)} = {value:.{decimal_places}f}", file=file)
 
 
 if __name__ == "__main__":
@@ -146,6 +166,8 @@ if __name__ == "__main__":
     exec_times = run_solution(day, part)
     if exec_times is None:
         sys.exit(4)
+    exec_times = remove_outliers(exec_times)
 
     stats = compute_statistics(exec_times)
-    pprint(stats)
+    print()
+    print_statistics(stats)
