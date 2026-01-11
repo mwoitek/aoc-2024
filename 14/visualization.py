@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pygame
 
+ROOT_DIR = Path(__file__).parents[1]
 GRID_WIDTH = 101
 GRID_HEIGHT = 103
 CELL_SIZE = 6
@@ -31,7 +32,7 @@ class Robot:
         m = cast("re.Match", m)
         return tuple(int(i) for i in m.groups())  # pyright: ignore[reportReturnType]
 
-    def update(self, time: int = DELTA_TIME) -> None:
+    def update(self, time: int) -> None:
         self.px = (self.px + time * self.vx) % GRID_WIDTH
         self.py = (self.py + time * self.vy) % GRID_HEIGHT
 
@@ -90,6 +91,7 @@ class Simulation:
         self.is_running = False
         self.is_playing = False
         self.time = 0
+        self.delta_time = DELTA_TIME
         self.robots = robots
         self.grid = grid
         self.grid.update(self.robots)
@@ -106,18 +108,40 @@ class Simulation:
         pygame.quit()
 
     def handle_event(self, event: pygame.event.Event) -> None:
-        if event.type == UPDATE_EVENT:
-            self.update()
-        elif event.type == pygame.QUIT:
+        type_ = event.type
+        if type_ == UPDATE_EVENT:
+            self.update(self.delta_time)
+        elif type_ == pygame.KEYDOWN:
+            self.handle_keydown(event.key)
+        elif type_ == pygame.QUIT:
             self.is_running = False
-        elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+
+    def handle_keydown(self, key: int) -> None:
+        if key == pygame.K_SPACE:
             if self.is_playing:
                 self.pause()
             else:
                 self.play()
+        elif key == pygame.K_h:
+            if not self.is_playing:
+                self.update(-1)
+        elif key == pygame.K_l:
+            if not self.is_playing:
+                self.update(1)
+        elif key == pygame.K_j:
+            if not self.is_playing:
+                self.delta_time = max(self.delta_time - 1, 1)
+        elif key == pygame.K_k:
+            if not self.is_playing:
+                self.delta_time += 1
+        elif key == pygame.K_q:
+            self.is_running = False
+        elif key == pygame.K_s:
+            self.save_image()
 
-    def update(self, time: int = DELTA_TIME) -> None:
+    def update(self, time: int) -> None:
         self.time += time
+        print(self.time)  # TODO: remove
         for robot in self.robots:
             robot.update(time)
         self.grid.update(self.robots)
@@ -135,9 +159,14 @@ class Simulation:
         self.grid.render(self.screen)
         pygame.display.flip()
 
+    def save_image(self) -> None:
+        sub_surf = self.screen.subsurface(0, 0, GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE)
+        img_path = ROOT_DIR / "14" / f"grid_{self.time}.png"
+        pygame.image.save(sub_surf, img_path)
+
 
 if __name__ == "__main__":
-    input_path = Path("~/repos/advent_of_code_2024/data/day_14.txt").expanduser()
+    input_path = ROOT_DIR / "data" / "day_14.txt"
     robots = get_robots(input_path)
     grid = Grid()
     sim = Simulation(robots, grid)
