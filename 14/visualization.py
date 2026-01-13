@@ -1,21 +1,31 @@
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pygame
 
 ROOT_DIR = Path(__file__).parents[1]
+ROBOTS_PATH = ROOT_DIR / "data" / "day_14.txt"
+
+FONT_PATH = ROOT_DIR / "14" / "PressStart2P-Regular.ttf"
+FONT_SIZE = 24
+
 GRID_WIDTH = 101
 GRID_HEIGHT = 103
 CELL_SIZE = 6
-WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE
-WINDOW_WIDTH = (WINDOW_HEIGHT * 4) // 3
+WINDOW_WIDTH = GRID_WIDTH * CELL_SIZE
+HUD_HEIGHT = 3 * FONT_SIZE
+WINDOW_HEIGHT = GRID_HEIGHT * CELL_SIZE + HUD_HEIGHT
 TITLE = "AoC 2024: Day 14, Part 2"
-DELTA_TIME = 20
-UPDATE_EVENT = pygame.event.custom_type()
+
+pygame.font.init()
+FONT = pygame.font.Font(FONT_PATH, FONT_SIZE)
 
 BLACK = pygame.Color(2, 2, 2)
 GREEN = pygame.Color(10, 149, 72)
+
+DELTA_TIME = 20
+UPDATE_EVENT = pygame.event.custom_type()
 
 
 class Robot:
@@ -32,9 +42,9 @@ class Robot:
         m = cast("re.Match", m)
         return tuple(int(i) for i in m.groups())  # pyright: ignore[reportReturnType]
 
-    def update(self, time: int) -> None:
-        self.px = (self.px + time * self.vx) % GRID_WIDTH
-        self.py = (self.py + time * self.vy) % GRID_HEIGHT
+    def update(self, dt: int) -> None:
+        self.px = (self.px + dt * self.vx) % GRID_WIDTH
+        self.py = (self.py + dt * self.vy) % GRID_HEIGHT
 
 
 def get_robots(input_path: Path) -> list[Robot]:
@@ -42,59 +52,71 @@ def get_robots(input_path: Path) -> list[Robot]:
         return [Robot(line.strip()) for line in file]
 
 
-def build_matrix(rows: int, cols: int, val: Any) -> list[list[Any]]:
-    matrix: list[list[Any]] = []
-    for _ in range(rows):
-        row = [val for _ in range(cols)]
-        matrix.append(row)
-    return matrix
+class World:
+    def __init__(self, robots: list[Robot]) -> None:
+        self.time = 0
+        self.robots = robots
+        self.delta_time = DELTA_TIME
+
+    def update(self, dt: int | None = None) -> None:
+        if dt is None:
+            dt = self.delta_time
+        self.time += dt
+        for robot in self.robots:
+            robot.update(dt)
+
+    def save_data(self, out_path: Path) -> bool:
+        with out_path.open("w") as file:
+            for robot in self.robots:
+                file.write(f"{robot.px},{robot.py}\n")
+        return out_path.exists() and out_path.is_file()
 
 
-class Grid:
+class WorldRenderer:
     def __init__(self) -> None:
-        self.occupied = build_matrix(GRID_HEIGHT, GRID_WIDTH, val=False)
-        self.occupied = cast("list[list[bool]]", self.occupied)
-        self.rects = self._build_rectangles()
-
-    def clear(self) -> None:
-        for i in range(GRID_HEIGHT):
-            for j in range(GRID_WIDTH):
-                self.occupied[i][j] = False
-
-    def update(self, robots: list[Robot]) -> None:
-        self.clear()
-        for robot in robots:
-            self.occupied[robot.py][robot.px] = True
+        self.world_rect = pygame.Rect(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT - HUD_HEIGHT)
+        self.robot_surf = self._get_robot_surface(CELL_SIZE, GREEN)
 
     @staticmethod
-    def _build_rectangles() -> list[list[pygame.Rect]]:
-        rects: list[list[pygame.Rect]] = []
-        for i in range(GRID_HEIGHT):
-            row: list[pygame.Rect] = []
-            top = i * CELL_SIZE
-            for j in range(GRID_WIDTH):
-                left = j * CELL_SIZE
-                rect = pygame.Rect(left, top, CELL_SIZE, CELL_SIZE)
-                row.append(rect)
-            rects.append(row)
-        return rects
+    def _get_robot_surface(cell_size: int, color: pygame.typing.ColorLike) -> pygame.Surface:
+        surf = pygame.Surface((cell_size, cell_size))
+        surf.fill(color)
+        return surf
+
+    def render(self, screen: pygame.Surface, world: World) -> None:
+        screen.fill(BLACK, self.world_rect)
+        for robot in world.robots:
+            x = robot.px * CELL_SIZE
+            y = robot.py * CELL_SIZE
+            screen.blit(self.robot_surf, (x, y))
+        pygame.display.update(self.world_rect)
+
+    def save_image(self, screen: pygame.Surface, out_path: Path) -> bool:
+        sub_surf = screen.subsurface(self.world_rect)
+        pygame.image.save(sub_surf, out_path)
+        return out_path.exists() and out_path.is_file()
+
+
+class Hud:
+    def __init__(self) -> None:
+        # TODO
+        pass
+
+    def update(self, world: World) -> None:
+        # TODO
+        return
 
     def render(self, screen: pygame.Surface) -> None:
-        for i in range(GRID_HEIGHT):
-            for j in range(GRID_WIDTH):
-                color = GREEN if self.occupied[i][j] else BLACK
-                pygame.draw.rect(screen, color, self.rects[i][j])
+        # TODO
+        return
 
 
 class Simulation:
-    def __init__(self, robots: list[Robot], grid: Grid) -> None:
+    def __init__(self, world: World, renderer: WorldRenderer, hud: Hud) -> None:
         self.is_running = False
-        self.is_playing = False
-        self.time = 0
-        self.delta_time = DELTA_TIME
-        self.robots = robots
-        self.grid = grid
-        self.grid.update(self.robots)
+        self.world = world
+        self.renderer = renderer
+        self.hud = hud
 
     def run(self) -> None:
         pygame.init()
@@ -107,67 +129,52 @@ class Simulation:
             self.render()
         pygame.quit()
 
-    def handle_event(self, event: pygame.event.Event) -> None:
-        type_ = event.type
-        if type_ == UPDATE_EVENT:
-            self.update(self.delta_time)
-        elif type_ == pygame.KEYDOWN:
-            self.handle_keydown(event.key)
-        elif type_ == pygame.QUIT:
-            self.is_running = False
+    def stop(self) -> None:
+        self.is_running = False
 
+    def handle_event(self, event: pygame.event.Event) -> None:
+        match event.type:
+            case t if t == UPDATE_EVENT:
+                self.update()
+            case pygame.KEYDOWN:
+                self.handle_keydown(event.key)
+            case pygame.QUIT:
+                self.stop()
+            case _:
+                pass
+
+    # FIXME
     def handle_keydown(self, key: int) -> None:
         if key == pygame.K_SPACE:
             if self.is_playing:
                 self.pause()
             else:
                 self.play()
-        elif key == pygame.K_h:
-            if not self.is_playing:
-                self.update(-1)
-        elif key == pygame.K_l:
-            if not self.is_playing:
-                self.update(1)
-        elif key == pygame.K_j:
-            if not self.is_playing:
-                self.delta_time = max(self.delta_time - 1, 1)
-        elif key == pygame.K_k:
-            if not self.is_playing:
-                self.delta_time += 1
         elif key == pygame.K_q:
-            self.is_running = False
+            self.stop()
         elif key == pygame.K_s:
-            self.save_image()
+            self.save()
+        # elif self.is_playing:
+        #     return
+        # elif key == pygame.K_h:
+        #     self.update(-1)
+        # elif key == pygame.K_l:
+        #     self.update(1)
+        # elif key == pygame.K_j:
+        #     self.delta_time = max(self.delta_time - 1, 1)
+        # elif key == pygame.K_k:
+        #     self.delta_time += 1
 
-    def update(self, time: int) -> None:
-        self.time += time
-        print(self.time)  # TODO: remove
-        for robot in self.robots:
-            robot.update(time)
-        self.grid.update(self.robots)
-
-    def play(self) -> None:
-        self.is_playing = True
-        pygame.time.set_timer(UPDATE_EVENT, 1000)
-
-    def pause(self) -> None:
-        self.is_playing = False
-        pygame.time.set_timer(UPDATE_EVENT, 0)
+    def update(self, delta_time: int) -> None:
+        self.world.update(delta_time)
+        self.hud.update(self.world)
 
     def render(self) -> None:
-        self.screen.fill(BLACK)
-        self.grid.render(self.screen)
-        pygame.display.flip()
-
-    def save_image(self) -> None:
-        sub_surf = self.screen.subsurface(0, 0, GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE)
-        img_path = ROOT_DIR / "14" / f"grid_{self.time}.png"
-        pygame.image.save(sub_surf, img_path)
+        self.hud.render(self.screen)
 
 
 if __name__ == "__main__":
-    input_path = ROOT_DIR / "data" / "day_14.txt"
-    robots = get_robots(input_path)
-    grid = Grid()
-    sim = Simulation(robots, grid)
+    robots = get_robots(ROBOTS_PATH)
+    hud = Hud()
+    sim = Simulation(hud)
     sim.run()
