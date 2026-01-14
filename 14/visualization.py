@@ -24,7 +24,7 @@ FONT = pygame.font.Font(FONT_PATH, FONT_SIZE)
 BLACK = pygame.Color(2, 2, 2)
 GREEN = pygame.Color(10, 149, 72)
 
-DELTA_TIME = 20
+DELTA_TIME = 100
 UPDATE_EVENT = pygame.event.custom_type()
 
 
@@ -61,9 +61,14 @@ class World:
     def update(self, dt: int | None = None) -> None:
         if dt is None:
             dt = self.delta_time
-        self.time += dt
+        new_time = max(self.time + dt, 0)
+        dt = new_time - self.time
+        self.time = new_time
         for robot in self.robots:
             robot.update(dt)
+
+    def increment_delta_time(self, increment: int) -> None:
+        self.delta_time = max(self.delta_time + increment, 1)
 
     def save_data(self, out_path: Path) -> bool:
         with out_path.open("w") as file:
@@ -99,21 +104,35 @@ class WorldRenderer:
 
 class Hud:
     def __init__(self) -> None:
-        # TODO
-        pass
+        self.hud_surf = pygame.Surface((WINDOW_WIDTH, HUD_HEIGHT))
+        self.hud_rect = self.hud_surf.get_rect(topleft=(0, WINDOW_HEIGHT - HUD_HEIGHT))
+        self.surfs = [
+            FONT.render(text, True, GREEN)
+            for text in ["Time", "00000", "Delta time", f"{DELTA_TIME:05}"]
+        ]
+        tls = [(90, 8), (90, 40), (276, 8), (276, 40)]
+        self.rects = [s.get_rect(topleft=tl) for s, tl in zip(self.surfs, tls, strict=True)]
+        for surf, rect in zip(self.surfs, self.rects, strict=True):
+            self.hud_surf.blit(surf, rect)
 
     def update(self, world: World) -> None:
-        # TODO
-        return
+        self.hud_surf.fill(BLACK, self.rects[1])
+        self.hud_surf.fill(BLACK, self.rects[3])
+        self.surfs[1] = FONT.render(f"{world.time:05}", True, GREEN)
+        self.surfs[3] = FONT.render(f"{world.delta_time:05}", True, GREEN)
+        self.hud_surf.blit(self.surfs[1], self.rects[1])
+        self.hud_surf.blit(self.surfs[3], self.rects[3])
 
     def render(self, screen: pygame.Surface) -> None:
-        # TODO
-        return
+        screen.fill(BLACK, self.hud_rect)
+        screen.blit(self.hud_surf, self.hud_rect)
+        pygame.display.update(self.hud_rect)
 
 
 class Simulation:
     def __init__(self, world: World, renderer: WorldRenderer, hud: Hud) -> None:
         self.is_running = False
+        self.is_playing = False
         self.world = world
         self.renderer = renderer
         self.hud = hud
@@ -132,6 +151,14 @@ class Simulation:
     def stop(self) -> None:
         self.is_running = False
 
+    def play(self) -> None:
+        self.is_playing = True
+        pygame.time.set_timer(UPDATE_EVENT, 1000)
+
+    def pause(self) -> None:
+        self.is_playing = False
+        pygame.time.set_timer(UPDATE_EVENT, 0)
+
     def handle_event(self, event: pygame.event.Event) -> None:
         match event.type:
             case t if t == UPDATE_EVENT:
@@ -143,38 +170,67 @@ class Simulation:
             case _:
                 pass
 
-    # FIXME
+    # NOTE: I'm not a fan of this solution. But using the state pattern in this
+    # simple case seems like overkill.
     def handle_keydown(self, key: int) -> None:
-        if key == pygame.K_SPACE:
-            if self.is_playing:
-                self.pause()
-            else:
-                self.play()
-        elif key == pygame.K_q:
-            self.stop()
-        elif key == pygame.K_s:
-            self.save()
-        # elif self.is_playing:
-        #     return
-        # elif key == pygame.K_h:
-        #     self.update(-1)
-        # elif key == pygame.K_l:
-        #     self.update(1)
-        # elif key == pygame.K_j:
-        #     self.delta_time = max(self.delta_time - 1, 1)
-        # elif key == pygame.K_k:
-        #     self.delta_time += 1
+        if self.is_playing:
+            match key:
+                case pygame.K_SPACE:
+                    self.pause()
+                case pygame.K_q:
+                    self.stop()
+                case pygame.K_s:
+                    self.save()
+                case _:
+                    pass
+        else:
+            match key:
+                case pygame.K_SPACE:
+                    self.play()
+                case pygame.K_q:
+                    self.stop()
+                case pygame.K_s:
+                    self.save()
+                case pygame.K_h:
+                    self.update(-1)
+                case pygame.K_l:
+                    self.update(1)
+                case pygame.K_j:
+                    self.world.increment_delta_time(-1)
+                    self.hud.update(self.world)
+                case pygame.K_k:
+                    self.world.increment_delta_time(1)
+                    self.hud.update(self.world)
+                case _:
+                    pass
 
-    def update(self, delta_time: int) -> None:
-        self.world.update(delta_time)
+    def update(self, dt: int | None = None) -> None:
+        self.world.update(dt)
         self.hud.update(self.world)
 
     def render(self) -> None:
+        self.renderer.render(self.screen, self.world)
         self.hud.render(self.screen)
+
+    def save(self) -> None:
+        data_path = ROOT_DIR / "14" / f"positions_{self.world.time}.csv"
+        saved_data = self.world.save_data(data_path)
+        if saved_data:
+            print(f"Position data saved to {data_path}")
+        else:
+            print("Failed to save data!")
+        image_path = ROOT_DIR / "14" / f"grid_{self.world.time}.png"
+        saved_image = self.renderer.save_image(self.screen, image_path)
+        if saved_image:
+            print(f"Grid image saved to {image_path}")
+        else:
+            print("Failed to save image!")
 
 
 if __name__ == "__main__":
     robots = get_robots(ROBOTS_PATH)
+    world = World(robots)
+    renderer = WorldRenderer()
     hud = Hud()
-    sim = Simulation(hud)
+    sim = Simulation(world, renderer, hud)
     sim.run()
