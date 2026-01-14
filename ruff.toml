@@ -5,13 +5,13 @@ unsafe-fixes = false
 [lint]
 select = ["ALL"]
 ignore = [
-  "ANN401",
   "B018",
-  "C901",
+  "C90",
   "COM812",
   "D",
   "DTZ",
-  "ERA001",
+  "ERA",
+  "FBT",
   "FIX",
   "INP001",
   "PLR0912",
